@@ -1,0 +1,19 @@
+{
+  "name": "mall-management-system",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Squared-A/mall-management-system.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Squared-A/mall-management-system/issues"
+  },
+  "homepage": "https://github.com/Squared-A/mall-management-system#readme"
+}
