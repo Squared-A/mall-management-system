@@ -35,7 +35,12 @@ const mallSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    required: true,
+    enum: ["PENDING", "APPROVED", "REJECTED"],
+    default: "PENDING",
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

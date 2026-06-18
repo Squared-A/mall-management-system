@@ -1,22 +1,55 @@
-import authRepository from "./auth.repository.js";
-import { updateLastLogin } from "../users/users.services.js";
+import User from "../users/user.model.js";
+// import { updateLastLogin } from "../users/users.services.js";
 import bcrypt from "bcrypt";
-import generateToken from "./utils/jwt.js";
+import generateToken from "../../utils/jwt.js";
+
+const register = async (data) => {
+  const existingUser = await User.findOne({
+    email: data.email,
+    isDeleted: false,
+  });
+
+  if (existingUser) {
+    throw new Error("user with this email found!");
+  }
+
+  const hashedPassword = await bcrypt.hash(data.password, 10);
+
+  const newUser = User.create({ ...data, password: hashedPassword });
+
+  const token = generateToken({
+    id: newUser._id,
+    role: newUser.role,
+    mallId: user.mallId,
+  });
+
+  return {
+    newUser,
+    token,
+  };
+};
 
 const login = async ({ email, password }) => {
-  const user = await authRepository.findUserByEmail(email);
+  const user = await User.findOne({ email, isDeleted: false }).select(
+    "+password",
+  );
 
   if (!user) {
     throw new Error("Invalid email or password");
   }
+
   const isValid = await bcrypt.compare(password, user.password);
 
   if (!isValid) {
     throw new Error("Invalid email or password");
   }
-  const token = generateToken({ id: user._id, role: user.role });
+  const token = generateToken({
+    id: user._id,
+    role: user.role,
+    mallId: user.mallId,
+  });
   const lastLogin = new Date();
-  await updateLastLogin(user._id, lastLogin);
+  await User.findByIdAndUpdate(user._id, lastLogin);
 
   return {
     token,
@@ -25,9 +58,10 @@ const login = async ({ email, password }) => {
       name: user.name,
       email: user.email,
       lastLogin: user.lastLogin,
+      mallId: user.mallId,
       role: user.role,
     },
   };
 };
 
-export default { login };
+export default { register, login };
