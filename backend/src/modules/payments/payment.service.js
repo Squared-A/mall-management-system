@@ -13,7 +13,7 @@ const updatePayment = async ({ id, data }) => {
 
 const getPayments = async () => {
   const payments = await Payment.find({ isDeleted: false }).populate("Lease");
-  const filteredPayments = Payment.filter((p) => p.lease?.mallId === mallId);
+  const filteredPayments = payments.filter((p) => p.lease?.mallId === mallId);
   return filteredPayments;
 };
 
