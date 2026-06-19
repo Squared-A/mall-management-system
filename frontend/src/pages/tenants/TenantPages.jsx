@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User, Mail, Phone, Building2, FileText } from 'lucide-react';
+import { User, Mail, Phone, Building2, FileText, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/common/PageHeader';
 import Card from '../../components/common/Card';
 import TextInput from '../../components/forms/TextInput';
 import TextArea from '../../components/forms/TextArea';
+import SelectInput from '../../components/forms/SelectInput';
 import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Avatar from '../../components/common/Avatar';
@@ -13,55 +14,200 @@ import Badge from '../../components/common/Badge';
 import { useForm } from '../../hooks/useForm';
 import { useFetch } from '../../hooks/useFetch';
 import { tenantService } from '../../services/tenantService';
-import { isRequired, isValidEmail, isValidPhone } from '../../utils/validators';
+import { useMall } from '../../context/MallContext';
+import { isRequired, isValidEmail, isValidPhone, isValidPassword } from '../../utils/validators';
 import { ROUTES } from '../../constants/routes';
 import { formatDate } from '../../utils/formatters';
 
-const TenantForm = ({ initialValues = {}, onSubmit, loading, submitLabel }) => {
-  const defaults = { name: '', email: '', phone: '', businessName: '', businessType: '', nationalId: '', notes: '', ...initialValues };
-  const { values, errors, handleChange, handleSubmit } = useForm(defaults, {
-    name: [(v) => (!isRequired(v) ? 'Full name is required' : null)],
-    email: [
+const normalizeTenant = (tenant = {}) => ({
+  ...tenant,
+  name: tenant.name || tenant.fullName || tenant.userId?.fullName || '',
+  fullName: tenant.fullName || tenant.name || tenant.userId?.fullName || '',
+  email: tenant.email || tenant.userId?.email || '',
+  phone: tenant.phone || tenant.userId?.phone || '',
+  mallId: tenant.mallId?._id || tenant.mallId || '',
+  status: tenant.status || (tenant.userId?.isActive === false ? 'inactive' : 'active'),
+});
+
+const buildTenantPayload = (values, { includeCredentials = false } = {}) => {
+  const payload = {
+    businessName: values.businessName,
+    tradeLicense: values.tradeLicense,
+    tinNumber: values.tinNumber,
+    emergencyContact: values.emergencyContact,
+    mallId: values.mallId,
+  };
+
+  if (includeCredentials) {
+    payload.fullName = values.fullName;
+    payload.email = values.email;
+    payload.phone = values.phone;
+    payload.password = values.password;
+  }
+
+  return payload;
+};
+// Previously this form only collected business details (businessName,
+// tradeLicense, tinNumber, emergencyContact) and submitted them straight
+// to tenantService.create(). The backend's registerTenant requires email,
+// password, and fullName to create the linked login (User) account — none
+// of those fields existed here, so every tenant created through this form
+// would fail validation (or, before the backend fix, would create a
+// Tenant profile with no way to ever log in). isEdit hides the
+// credential fields since editing a tenant shouldn't touch their login.
+const TenantForm = ({ initialValues = {}, onSubmit, loading, submitLabel, isEdit = false }) => {
+  const { malls, activeMallId } = useMall();
+  const defaults = {
+    fullName: '',
+    email: '',
+    phone: '',
+    password: '',
+    businessName: '',
+    tradeLicense: '',
+    tinNumber: '',
+    emergencyContact: '',
+    mallId: activeMallId || '',
+    ...initialValues
+  };
+
+  const rules = {
+    businessName: [(v) => (!isRequired(v) ? 'Business name is required' : null)],
+    mallId: [(v) => (!isRequired(v) ? 'A mall must be selected' : null)],
+  };
+
+  if (!isEdit) {
+    rules.fullName = [(v) => (!isRequired(v) ? 'Full name is required' : null)];
+    rules.email = [
       (v) => (!isRequired(v) ? 'Email is required' : null),
       (v) => (!isValidEmail(v) ? 'Enter a valid email' : null),
-    ],
-    phone: [(v) => (!isRequired(v) ? 'Phone is required' : null)],
-    businessName: [(v) => (!isRequired(v) ? 'Business name is required' : null)],
-  }, onSubmit);
+    ];
+    rules.password = [
+      (v) => (!isRequired(v) ? 'Password is required' : null),
+      (v) => (!isValidPassword(v) ? 'Password must be at least 8 characters' : null),
+    ];
+  }
+
+  const { values, errors, handleChange, handleSubmit } = useForm(defaults, rules, onSubmit);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <Card title="Personal Information">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <TextInput label="Full Name" name="name" icon={User} placeholder="Jane Doe" value={values.name} onChange={handleChange} error={errors.name} required className="sm:col-span-2" />
-          <TextInput label="Email" name="email" type="email" icon={Mail} placeholder="jane@example.com" value={values.email} onChange={handleChange} error={errors.email} required />
-          <TextInput label="Phone" name="phone" icon={Phone} placeholder="+1 555 000 0000" value={values.phone} onChange={handleChange} error={errors.phone} required />
-          <TextInput label="National ID / Passport" name="nationalId" icon={FileText} placeholder="ID Number" value={values.nationalId} onChange={handleChange} />
-        </div>
-      </Card>
+      {!isEdit && (
+        <Card title="Login Account">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <TextInput
+              label="Full Name"
+              name="fullName"
+              icon={User}
+              placeholder="Jane Doe"
+              value={values.fullName}
+              onChange={handleChange}
+              error={errors.fullName}
+              required
+            />
+            <TextInput
+              label="Email Address"
+              name="email"
+              type="email"
+              icon={Mail}
+              placeholder="tenant@example.com"
+              value={values.email}
+              onChange={handleChange}
+              error={errors.email}
+              required
+            />
+            <TextInput
+              label="Temporary Password"
+              name="password"
+              type="password"
+              icon={Lock}
+              placeholder="Min. 8 characters"
+              value={values.password}
+              onChange={handleChange}
+              error={errors.password}
+              required
+              helperText="The tenant will use this, with their email, to log in."
+              className="sm:col-span-2"
+            />
+          </div>
+        </Card>
+      )}
       <Card title="Business Information">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <TextInput label="Business Name" name="businessName" icon={Building2} placeholder="Bright Coffee Co." value={values.businessName} onChange={handleChange} error={errors.businessName} required />
-          <TextInput label="Business Type" name="businessType" placeholder="Café / Retail / Services..." value={values.businessType} onChange={handleChange} />
-          <TextArea label="Notes" name="notes" placeholder="Any additional notes..." value={values.notes} onChange={handleChange} rows={3} className="sm:col-span-2" />
+          <TextInput
+            label="Business Name"
+            name="businessName"
+            icon={Building2}
+            placeholder="Your Business Name"
+            value={values.businessName}
+            onChange={handleChange}
+            error={errors.businessName}
+            required
+          />
+          <SelectInput
+            label="Assigned Mall"
+            name="mallId"
+            options={malls.map((m) => ({ value: m._id, label: m.name }))}
+            value={values.mallId}
+            onChange={handleChange}
+            error={errors.mallId}
+            placeholder="Select a mall"
+            required
+          />
+          <TextInput
+            label="Trade License"
+            name="tradeLicense"
+            placeholder="Trade License Number"
+            value={values.tradeLicense}
+            onChange={handleChange}
+          />
+          <TextInput
+            label="TIN Number"
+            name="tinNumber"
+            type="number"
+            placeholder="Tax ID Number"
+            value={values.tinNumber}
+            onChange={handleChange}
+          />
+          <TextInput
+            label="Phone"
+            name="phone"
+            type="tel"
+            icon={Phone}
+            placeholder="Contact Number"
+            value={values.phone}
+            onChange={handleChange}
+          />
+          <TextInput
+            label="Emergency Contact"
+            name="emergencyContact"
+            type="tel"
+            icon={Phone}
+            placeholder="Emergency Contact Number"
+            value={values.emergencyContact}
+            onChange={handleChange}
+          />
         </div>
       </Card>
       <div className="flex justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={() => window.history.back()}>Cancel</Button>
-        <Button type="submit" loading={loading}>{submitLabel}</Button>
+        <Button type="button" variant="secondary" onClick={() => window.history.back()}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={loading}>
+          {submitLabel}
+        </Button>
       </div>
     </form>
   );
 };
 
-const SEED_TENANT = { _id: 't1', name: 'Alice Johnson', businessName: 'Bright Coffee Co.', email: 'alice@brightcoffee.com', phone: '+1 555 101 2020', businessType: 'Café', nationalId: 'ID-12345', shopNumber: '112', status: 'active', createdAt: '2022-01-10', notes: 'Reliable tenant with consistent payments.' };
+const SEED_TENANT = { _id: 't1', businessName: 'Bright Coffee Co.', tradeLicense: 'TL-12345', tinNumber: 1234567890, emergencyContact: 5551234567, createdAt: '2022-01-10' };
 
 export const AddTenant = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const handleSubmit = async (values) => {
     setLoading(true);
-    try { await tenantService.create(values); toast.success('Tenant added!'); navigate(ROUTES.TENANTS); }
+    try { await tenantService.create(buildTenantPayload(values, { includeCredentials: true })); toast.success('Tenant added!'); navigate(ROUTES.TENANTS); }
     catch (err) { toast.error(err?.response?.data?.message || 'Failed to add tenant'); }
     finally { setLoading(false); }
   };
@@ -77,10 +223,10 @@ export const EditTenant = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const { data: tenant, loading } = useFetch(async () => { try { return await tenantService.getById(id); } catch { return SEED_TENANT; } }, [id]);
+  const { data: tenant, loading } = useFetch(async () => { try { return normalizeTenant(await tenantService.getById(id)); } catch { return SEED_TENANT; } }, [id]);
   const handleSubmit = async (values) => {
     setSaving(true);
-    try { await tenantService.update(id, values); toast.success('Tenant updated!'); navigate(ROUTES.TENANTS); }
+    try { await tenantService.update(id, buildTenantPayload(values)); toast.success('Tenant updated!'); navigate(ROUTES.TENANTS); }
     catch (err) { toast.error(err?.response?.data?.message || 'Failed to update tenant'); }
     finally { setSaving(false); }
   };
@@ -88,7 +234,7 @@ export const EditTenant = () => {
   return (
     <>
       <PageHeader title="Edit Tenant" breadcrumbs={[{ label: 'Tenants', to: ROUTES.TENANTS }, { label: tenant?.name }, { label: 'Edit' }]} />
-      <TenantForm initialValues={tenant} onSubmit={handleSubmit} loading={saving} submitLabel="Save Changes" />
+      <TenantForm initialValues={tenant} onSubmit={handleSubmit} loading={saving} submitLabel="Save Changes" isEdit />
     </>
   );
 };
@@ -96,34 +242,23 @@ export const EditTenant = () => {
 export const TenantDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data: tenant, loading } = useFetch(async () => { try { return await tenantService.getById(id); } catch { return SEED_TENANT; } }, [id]);
+  const { data: tenant, loading } = useFetch(async () => { try { return normalizeTenant(await tenantService.getById(id)); } catch { return SEED_TENANT; } }, [id]);
   if (loading) return <LoadingSpinner fullScreen />;
   return (
     <>
       <PageHeader
-        title={tenant?.name}
-        subtitle={tenant?.businessName}
-        breadcrumbs={[{ label: 'Tenants', to: ROUTES.TENANTS }, { label: tenant?.name }]}
+        title={tenant?.businessName}
+        breadcrumbs={[{ label: 'Tenants', to: ROUTES.TENANTS }, { label: tenant?.businessName }]}
         actions={<Button onClick={() => navigate(ROUTES.TENANT_EDIT.replace(':id', id))}>Edit</Button>}
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2" title="Tenant Profile">
-          <div className="flex items-center gap-4 mb-6">
-            <Avatar name={tenant?.name} size="lg" />
-            <div>
-              <p className="text-lg font-bold text-gray-900 dark:text-gray-50">{tenant?.name}</p>
-              <p className="text-sm text-gray-500">{tenant?.businessName}</p>
-              <Badge status={tenant?.status} />
-            </div>
-          </div>
+        <Card className="lg:col-span-2" title="Tenant Information">
           {[
-            { label: 'Email', value: tenant?.email },
-            { label: 'Phone', value: tenant?.phone },
-            { label: 'Business Type', value: tenant?.businessType },
-            { label: 'National ID', value: tenant?.nationalId },
-            { label: 'Shop Number', value: tenant?.shopNumber },
+            { label: 'Business Name', value: tenant?.businessName },
+            { label: 'Trade License', value: tenant?.tradeLicense || '—' },
+            { label: 'TIN Number', value: tenant?.tinNumber || '—' },
+            { label: 'Emergency Contact', value: tenant?.emergencyContact || '—' },
             { label: 'Member Since', value: formatDate(tenant?.createdAt) },
-            { label: 'Notes', value: tenant?.notes },
           ].map(({ label, value }) => (
             <div key={label} className="flex justify-between border-b border-gray-50 dark:border-gray-800 py-2.5 last:border-0">
               <span className="text-sm text-gray-400">{label}</span>
@@ -150,3 +285,4 @@ export const TenantDetails = () => {
     </>
   );
 };
+

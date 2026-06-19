@@ -14,9 +14,23 @@ import { useFetch } from '../../hooks/useFetch';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { tenantService } from '../../services/tenantService';
+import { leaseService } from '../../services/leaseService';
+import { useMall } from '../../context/MallContext';
 import { ROUTES } from '../../constants/routes';
 import { formatDate } from '../../utils/formatters';
 
+const normalizeTenant = (tenant = {}, activeLease) => ({
+  ...tenant,
+  name: tenant.name || tenant.fullName || tenant.userId?.fullName || '',
+  email: tenant.email || tenant.userId?.email || '',
+  phone: tenant.phone || tenant.userId?.phone || '',
+  shopNumber:
+    tenant.shopNumber ||
+    activeLease?.shopId?.shopNumber ||
+    activeLease?.shopNumber ||
+    '',
+  status: tenant.status || (tenant.userId?.isActive === false ? 'inactive' : 'active'),
+});
 const SEED_TENANTS = [
   { _id: 't1', name: 'Alice Johnson', businessName: 'Bright Coffee Co.', email: 'alice@brightcoffee.com', phone: '+1 555 101 2020', shopNumber: '112', status: 'active', createdAt: '2022-01-10' },
   { _id: 't2', name: 'Bob Martinez', businessName: 'TechZone Electronics', email: 'bob@techzone.com', phone: '+1 555 202 3030', shopNumber: '204', status: 'active', createdAt: '2021-08-15' },
@@ -27,18 +41,29 @@ const SEED_TENANTS = [
 
 const TenantList = () => {
   const navigate = useNavigate();
+  const { activeMallId } = useMall();
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading, refetch } = useFetch(async () => {
-    try { return await tenantService.list(); }
-    catch { return SEED_TENANTS; }
-  }, []);
+  const { data = [], loading, refetch } = useFetch(async () => {
+    const [tenants, leases] = await Promise.all([
+      tenantService.list(),
+      leaseService.list(),
+    ]);
+    const activeLeaseByTenant = new Map(
+      leases
+        .filter((lease) => lease.status === 'ACTIVE')
+        .map((lease) => [lease.tenantId?._id || lease.tenantId, lease]),
+    );
+    return tenants.map((tenant) =>
+      normalizeTenant(tenant, activeLeaseByTenant.get(tenant._id)),
+    );
+  }, [activeMallId]);
 
   const filtered = useMemo(() => {
-    const items = data || SEED_TENANTS;
+    const items = data || [];
     if (!debouncedSearch) return items;
     const q = debouncedSearch.toLowerCase();
     return items.filter((t) =>
@@ -122,3 +147,6 @@ const TenantList = () => {
 };
 
 export default TenantList;
+
+
+

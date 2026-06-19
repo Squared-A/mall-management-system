@@ -14,7 +14,6 @@ export const ROLE_LABELS = {
   [ROLES.TENANT]: 'Tenant (Shop Owner)',
 };
 
-// Roles allowed to access each module/route
 export const ROLE_GROUPS = {
   ALL: [
     ROLES.SUPER_ADMIN,
@@ -23,21 +22,47 @@ export const ROLE_GROUPS = {
     ROLES.ACCOUNTANT,
     ROLES.TENANT,
   ],
-  MANAGEMENT: [
+  PLATFORM_ADMIN: [ROLES.SUPER_ADMIN],
+  PLATFORM_CONTENT: [ROLES.SUPER_ADMIN],
+  PLATFORM_REPORTS: [ROLES.SUPER_ADMIN],
+  MALL_APPROVAL: [ROLES.SUPER_ADMIN],
+  MALL_OWNERSHIP: [ROLES.MALL_OWNER],
+  MALL_OPERATIONS: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER],
+  // Previously [MALL_OWNER, ACCOUNTANT] only — missing MALL_MANAGER, who
+  // the backend's payment.routes.js explicitly allows to create/update/
+  // delete payments (canManagePayments includes MALL_MANAGER).
+  MALL_FINANCE: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER, ROLES.ACCOUNTANT],
+  // Previously [MALL_OWNER] only — the backend's staff.routes.js
+  // (canManageStaff) explicitly allows MALL_MANAGER to add/edit/remove
+  // staff too, not just the owner.
+  MALL_STAFF_ADMIN: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER],
+  MALL_REPORTS: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER, ROLES.ACCOUNTANT],
+  TENANT_PORTAL: [ROLES.TENANT],
+  // Previously missing ACCOUNTANT, who the backend's lease.routes.js
+  // explicitly allows to VIEW (not manage) leases.
+  LEASE_ACCESS: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER, ROLES.ACCOUNTANT, ROLES.TENANT],
+  // Previously missing MALL_MANAGER (can manage payments) — see MALL_FINANCE
+  // note above for the same underlying gap.
+  PAYMENT_ACCESS: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER, ROLES.ACCOUNTANT, ROLES.TENANT],
+  // Previously missing ACCOUNTANT, who the backend's maintenance.routes.js
+  // explicitly allows to file/view tickets (canFileOrView includes
+  // ACCOUNTANT).
+  MAINTENANCE_ACCESS: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER, ROLES.ACCOUNTANT, ROLES.TENANT],
+  ANNOUNCEMENT_READ: [
     ROLES.SUPER_ADMIN,
     ROLES.MALL_OWNER,
     ROLES.MALL_MANAGER,
-  ],
-  FINANCE: [
-    ROLES.SUPER_ADMIN,
-    ROLES.MALL_OWNER,
     ROLES.ACCOUNTANT,
+    ROLES.TENANT,
   ],
-  ADMIN_ONLY: [ROLES.SUPER_ADMIN, ROLES.MALL_OWNER],
-  STAFF: [
-    ROLES.SUPER_ADMIN,
-    ROLES.MALL_OWNER,
-    ROLES.MALL_MANAGER,
-    ROLES.ACCOUNTANT,
-  ],
+  // Previously only PLATFORM_CONTENT (SUPER_ADMIN), which blocked mall
+  // owners and managers from creating announcements in their own malls
+  // even though the backend's announcement.routes.js explicitly allows
+  // SUPER_ADMIN, MALL_OWNER, and MALL_MANAGER to do so.
+  ANNOUNCEMENT_WRITE: [ROLES.SUPER_ADMIN, ROLES.MALL_OWNER, ROLES.MALL_MANAGER],
+  // Previously this group did not exist at all since the Expense module
+  // had no frontend pages. Matches expense.routes.js's canManageExpenses.
+  EXPENSE_ACCESS: [ROLES.MALL_OWNER, ROLES.MALL_MANAGER, ROLES.ACCOUNTANT],
 };
+
+

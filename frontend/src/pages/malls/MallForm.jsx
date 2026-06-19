@@ -6,43 +6,72 @@ import SelectInput from '../../components/forms/SelectInput';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import { useForm } from '../../hooks/useForm';
+import { useAuth } from '../../hooks/useAuth';
 import { isRequired } from '../../utils/validators';
 
 const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'maintenance', label: 'Under Maintenance' },
-  { value: 'closed', label: 'Closed' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
 ];
 
 const MallForm = ({ initialValues = {}, onSubmit, loading, submitLabel = 'Save Mall' }) => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+
   const defaults = {
     name: '',
     address: '',
     city: '',
-    state: '',
-    country: '',
-    postalCode: '',
-    phone: '',
-    email: '',
-    website: '',
-    totalFloors: '',
+    floors: '',
     totalShops: '',
-    status: 'active',
     description: '',
+    logo: '',
+    status: 'PENDING',
     ...initialValues,
   };
 
   const { values, errors, handleChange, handleSubmit } = useForm(
     defaults,
-    {
-      name: [(v) => (!isRequired(v) ? 'Mall name is required' : null)],
-      address: [(v) => (!isRequired(v) ? 'Address is required' : null)],
-      city: [(v) => (!isRequired(v) ? 'City is required' : null)],
-      country: [(v) => (!isRequired(v) ? 'Country is required' : null)],
-    },
+    isSuperAdmin
+      ? { status: [(v) => (!isRequired(v) ? 'Status is required' : null)] }
+      : {
+          name: [(v) => (!isRequired(v) ? 'Mall name is required' : null)],
+          address: [(v) => (!isRequired(v) ? 'Address is required' : null)],
+          city: [(v) => (!isRequired(v) ? 'City is required' : null)],
+          floors: [(v) => (!isRequired(v) ? 'Total floors is required' : null)],
+          totalShops: [(v) => (!isRequired(v) ? 'Total shops is required' : null)],
+          description: [(v) => (!isRequired(v) ? 'Description is required' : null)],
+          logo: [(v) => (!isRequired(v) ? 'Logo is required' : null)],
+        },
     onSubmit
   );
 
+  if (isSuperAdmin) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card title="Mall Approval">
+          <SelectInput
+            label="Status"
+            name="status"
+            options={STATUS_OPTIONS}
+            value={values.status}
+            onChange={handleChange}
+            error={errors.status}
+            required
+          />
+        </Card>
+        <div className="flex justify-end gap-3">
+          <Button type="button" variant="secondary" onClick={() => window.history.back()}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={loading}>
+            {submitLabel}
+          </Button>
+        </div>
+      </form>
+    );
+  }
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Card title="Basic Information">
@@ -59,29 +88,14 @@ const MallForm = ({ initialValues = {}, onSubmit, loading, submitLabel = 'Save M
             className="sm:col-span-2"
           />
           <TextInput
-            label="Phone"
-            name="phone"
-            icon={Phone}
-            placeholder="+1 555 000 0000"
-            value={values.phone}
-            onChange={handleChange}
-          />
-          <TextInput
-            label="Email"
-            name="email"
-            type="email"
-            icon={Mail}
-            placeholder="info@mall.com"
-            value={values.email}
-            onChange={handleChange}
-          />
-          <TextInput
-            label="Website"
-            name="website"
+            label="Logo URL"
+            name="logo"
             icon={Globe}
-            placeholder="https://mall.com"
-            value={values.website}
+            placeholder="https://example.com/logo.png"
+            value={values.logo}
             onChange={handleChange}
+            error={errors.logo}
+            required
             className="sm:col-span-2"
           />
         </div>
@@ -109,29 +123,6 @@ const MallForm = ({ initialValues = {}, onSubmit, loading, submitLabel = 'Save M
             error={errors.city}
             required
           />
-          <TextInput
-            label="State / Province"
-            name="state"
-            placeholder="NY"
-            value={values.state}
-            onChange={handleChange}
-          />
-          <TextInput
-            label="Country"
-            name="country"
-            placeholder="United States"
-            value={values.country}
-            onChange={handleChange}
-            error={errors.country}
-            required
-          />
-          <TextInput
-            label="Postal Code"
-            name="postalCode"
-            placeholder="10001"
-            value={values.postalCode}
-            onChange={handleChange}
-          />
         </div>
       </Card>
 
@@ -139,12 +130,14 @@ const MallForm = ({ initialValues = {}, onSubmit, loading, submitLabel = 'Save M
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <TextInput
             label="Total Floors"
-            name="totalFloors"
+            name="floors"
             type="number"
             icon={Hash}
             placeholder="4"
-            value={values.totalFloors}
+            value={values.floors}
             onChange={handleChange}
+            error={errors.floors}
+            required
           />
           <TextInput
             label="Total Shops"
@@ -154,20 +147,26 @@ const MallForm = ({ initialValues = {}, onSubmit, loading, submitLabel = 'Save M
             placeholder="120"
             value={values.totalShops}
             onChange={handleChange}
+            error={errors.totalShops}
+            required
           />
-          <SelectInput
-            label="Status"
-            name="status"
-            options={STATUS_OPTIONS}
-            value={values.status}
-            onChange={handleChange}
-          />
+          {isSuperAdmin && (
+            <SelectInput
+              label="Status"
+              name="status"
+              options={STATUS_OPTIONS}
+              value={values.status}
+              onChange={handleChange}
+            />
+          )}
           <TextArea
             label="Description"
             name="description"
             placeholder="Brief description of the mall..."
             value={values.description}
             onChange={handleChange}
+            error={errors.description}
+            required
             rows={3}
             className="sm:col-span-3"
           />
@@ -187,3 +186,6 @@ const MallForm = ({ initialValues = {}, onSubmit, loading, submitLabel = 'Save M
 };
 
 export default MallForm;
+
+
+

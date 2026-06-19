@@ -19,10 +19,23 @@ import { useForm } from '../../hooks/useForm';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { maintenanceService } from '../../services/maintenanceService';
+import { useMall } from '../../context/MallContext';
+import { useAuth } from '../../hooks/useAuth';
 import { ROUTES } from '../../constants/routes';
 import { formatDate } from '../../utils/formatters';
-import { isRequired } from '../../utils/validators';
+import { buildModelPayload } from '../../utils/payload';
 
+const normalizeMaintenance = (request = {}) => ({
+  ...request,
+  ticketNo: request.ticketNo || `MNT-${String(request._id || '').slice(-6).toUpperCase()}`,
+  shop:
+    request.shop ||
+    (request.shopId?.shopNumber ? `Shop #${request.shopId.shopNumber}` : ''),
+  requestedBy:
+    request.requestedBy ||
+    request.tenantId?.businessName ||
+    'Mall Staff',
+});
 const SEED_REQUESTS = [
   { _id: 'mr1', ticketNo: 'MNT-001', title: 'HVAC Repair', shop: 'Wing B, Floor 2', priority: 'high', status: 'in_progress', requestedBy: 'Mall Manager', createdAt: '2024-10-25' },
   { _id: 'mr2', ticketNo: 'MNT-002', title: 'Plumbing Leak', shop: 'Shop #204', priority: 'urgent', status: 'open', requestedBy: 'Bob Martinez', createdAt: '2024-10-28' },
@@ -32,43 +45,33 @@ const SEED_REQUESTS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'open', label: 'Open' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
+  { value: 'OPEN', label: 'Open' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'COMPLETED', label: 'Completed' },
 ];
 
 const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
-];
-
-const CATEGORY_OPTIONS = [
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'plumbing', label: 'Plumbing' },
-  { value: 'hvac', label: 'HVAC' },
-  { value: 'structural', label: 'Structural' },
-  { value: 'safety', label: 'Safety & Security' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'other', label: 'Other' },
+  { value: 'LOW', label: 'Low' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'HIGH', label: 'High' },
+  { value: 'URGENT', label: 'Urgent' },
 ];
 
 export const MaintenanceList = () => {
   const navigate = useNavigate();
+  const { activeMallId } = useMall();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading } = useFetch(async () => {
-    try { return await maintenanceService.list(); }
-    catch { return SEED_REQUESTS; }
-  }, []);
+  const { data = [], loading } = useFetch(async () => {
+    const requests = await maintenanceService.list();
+    return requests.map(normalizeMaintenance);
+  }, [activeMallId]);
 
   const filtered = useMemo(() => {
-    let items = data || SEED_REQUESTS;
+    let items = data || [];
     if (statusFilter) items = items.filter((r) => r.status === statusFilter);
     if (priorityFilter) items = items.filter((r) => r.priority === priorityFilter);
     if (debouncedSearch) {
@@ -133,20 +136,35 @@ export const MaintenanceList = () => {
 
 export const CreateMaintenanceRequest = () => {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isTenant = role === 'tenant';
   const [loading, setLoading] = useState(false);
 
   const { values, errors, handleChange, handleSubmit } = useForm(
-    { title: '', category: '', priority: 'medium', shopId: '', description: '' },
-    {
-      title: [(v) => (!isRequired(v) ? 'Title is required' : null)],
-      category: [(v) => (!isRequired(v) ? 'Category is required' : null)],
-      description: [(v) => (!isRequired(v) ? 'Description is required' : null)],
-    },
+    { tenantId: '', shopId: '', title: '', description: '', priority: 'LOW', status: 'OPEN', assignedTo: '' },
+    {},
     async (vals) => {
       setLoading(true);
-      try { await maintenanceService.create(vals); toast.success('Request submitted!'); navigate(ROUTES.MAINTENANCE); }
-      catch (err) { toast.error(err?.response?.data?.message || 'Failed to submit request'); }
-      finally { setLoading(false); }
+      try {
+        const payload = isTenant
+          ? buildModelPayload(vals, ['title', 'description', 'priority'])
+          : buildModelPayload(vals, [
+              'tenantId',
+              'shopId',
+              'title',
+              'description',
+              'priority',
+              'status',
+              'assignedTo',
+            ]);
+        await maintenanceService.create(payload);
+        toast.success('Request submitted!');
+        navigate(ROUTES.MAINTENANCE);
+      } catch (err) {
+        toast.error(err?.response?.data?.message || 'Failed to submit request');
+      } finally {
+        setLoading(false);
+      }
     }
   );
 
@@ -156,11 +174,21 @@ export const CreateMaintenanceRequest = () => {
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
         <Card title="Request Details">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextInput label="Issue Title" name="title" placeholder="Brief description of the issue" value={values.title} onChange={handleChange} error={errors.title} required className="sm:col-span-2" />
-            <SelectInput label="Category" name="category" options={CATEGORY_OPTIONS} value={values.category} onChange={handleChange} error={errors.category} placeholder="Select category" required />
+            {!isTenant && (
+              <>
+                <TextInput label="Tenant ID" name="tenantId" placeholder="Enter tenant ID" value={values.tenantId} onChange={handleChange} />
+                <TextInput label="Shop ID" name="shopId" placeholder="Enter shop ID" value={values.shopId} onChange={handleChange} />
+              </>
+            )}
+            <TextInput label="Issue Title" name="title" placeholder="Brief description of the issue" value={values.title} onChange={handleChange} className="sm:col-span-2" />
+            <TextArea label="Description" name="description" placeholder="Provide detailed information about the issue..." value={values.description} onChange={handleChange} rows={5} className="sm:col-span-2" />
             <SelectInput label="Priority" name="priority" options={PRIORITY_OPTIONS} value={values.priority} onChange={handleChange} />
-            <TextInput label="Shop / Location ID" name="shopId" placeholder="Shop #, wing, or area" value={values.shopId} onChange={handleChange} className="sm:col-span-2" />
-            <TextArea label="Description" name="description" placeholder="Provide detailed information about the issue, including when it started and its impact..." value={values.description} onChange={handleChange} error={errors.description} rows={5} required className="sm:col-span-2" />
+            {!isTenant && (
+              <>
+                <SelectInput label="Status" name="status" options={STATUS_OPTIONS} value={values.status} onChange={handleChange} />
+                <TextInput label="Assigned To" name="assignedTo" placeholder="Staff member or team" value={values.assignedTo} onChange={handleChange} className="sm:col-span-2" />
+              </>
+            )}
           </div>
         </Card>
         <div className="flex justify-end gap-3">
@@ -181,10 +209,12 @@ const SEED_REQUEST = { _id: 'mr1', ticketNo: 'MNT-001', title: 'HVAC Repair', sh
 
 export const RequestTracking = () => {
   const { id } = useParams();
+  const { role } = useAuth();
+  const isTenant = role === 'tenant';
   const [comment, setComment] = useState('');
 
   const { data: request, loading } = useFetch(async () => {
-    try { return await maintenanceService.getById(id); }
+    try { return normalizeMaintenance(await maintenanceService.getById(id)); }
     catch { return SEED_REQUEST; }
   }, [id]);
 
@@ -262,7 +292,7 @@ export const RequestTracking = () => {
             ))}
           </Card>
 
-          <Card title="Update Status">
+          {!isTenant && <Card title="Update Status">
             <div className="space-y-3">
               {STATUS_OPTIONS.map((opt) => (
                 <button
@@ -275,9 +305,12 @@ export const RequestTracking = () => {
                 </button>
               ))}
             </div>
-          </Card>
+          </Card>}
         </div>
       </div>
     </>
   );
 };
+
+
+

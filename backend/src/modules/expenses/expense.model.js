@@ -5,6 +5,7 @@ const expenseSchema = mongoose.Schema(
     mallId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Mall",
+      required: true,
     },
     category: {
       type: String,
@@ -25,6 +26,7 @@ const expenseSchema = mongoose.Schema(
     },
     amount: {
       type: Number,
+      required: true,
     },
     expenseDate: {
       type: Date,
@@ -45,6 +47,7 @@ const expenseSchema = mongoose.Schema(
     },
     isDeleted: {
       type: Boolean,
+      default: false, // previously had no default, so isDeleted:false filters matched nothing
     },
   },
   {

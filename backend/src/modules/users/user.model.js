@@ -34,9 +34,21 @@ const userSchema = mongoose.Schema(
         "ACCOUNTANT",
         "TENANT",
       ],
-      default: "MALL_OWNER",
+      required: true,
+      // NOTE: previously defaulted to "MALL_OWNER", which silently granted
+      // owner privileges to any user created without an explicit role.
+      // Role must now be supplied explicitly by the service layer.
     },
 
+    // MALL_OWNER can own multiple malls -> array.
+    // MALL_MANAGER / ACCOUNTANT / TENANT / staff are scoped to exactly one
+    // mall -> single ObjectId. SUPER_ADMIN uses neither (sees everything).
+    mallIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Mall",
+      },
+    ],
     mallId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Mall",

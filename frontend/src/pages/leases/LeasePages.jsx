@@ -13,17 +13,36 @@ import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import TextInput from '../../components/forms/TextInput';
 import SelectInput from '../../components/forms/SelectInput';
-import TextArea from '../../components/forms/TextArea';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useFetch } from '../../hooks/useFetch';
 import { useForm } from '../../hooks/useForm';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { leaseService } from '../../services/leaseService';
+import { tenantService } from '../../services/tenantService';
+import { shopService } from '../../services/shopService';
+import { useMall } from '../../context/MallContext';
 import { ROUTES } from '../../constants/routes';
 import { formatDate, formatCurrency } from '../../utils/formatters';
 import { isRequired, isPositiveNumber } from '../../utils/validators';
+import { buildModelPayload } from '../../utils/payload';
 
+const normalizeLease = (lease = {}) => ({
+  ...lease,
+  leaseNumber: lease.leaseNumber || `LSE-${String(lease._id || '').slice(-6).toUpperCase()}`,
+  tenant:
+    lease.tenant ||
+    lease.tenantId?.businessName ||
+    lease.tenantId?.userId?.fullName ||
+    '',
+  tenantEmail: lease.tenantEmail || lease.tenantId?.userId?.email || '',
+  shop:
+    lease.shop ||
+    (lease.shopId?.shopNumber ? `Shop #${lease.shopId.shopNumber}` : ''),
+  mall: lease.mall || lease.mallId?.name || '',
+  securityDeposit: lease.securityDeposit ?? lease.deposit,
+  status: String(lease.status || '').toLowerCase(),
+});
 const SEED_LEASES = [
   { _id: 'l1', leaseNumber: 'LSE-001', tenant: 'Alice Johnson', shop: 'Shop #112', startDate: '2022-01-10', endDate: '2024-01-09', monthlyRent: 4500, status: 'active' },
   { _id: 'l2', leaseNumber: 'LSE-002', tenant: 'Bob Martinez', shop: 'Shop #204', startDate: '2021-08-15', endDate: '2023-08-14', monthlyRent: 3800, status: 'expired' },
@@ -33,28 +52,28 @@ const SEED_LEASES = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'terminated', label: 'Terminated' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'EXPIRED', label: 'Expired' },
+  { value: 'TERMINATED', label: 'Terminated' },
 ];
 
 export const LeaseList = () => {
   const navigate = useNavigate();
+  const { activeMallId } = useMall();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading, refetch } = useFetch(async () => {
-    try { return await leaseService.list(); }
-    catch { return SEED_LEASES; }
-  }, []);
+  const { data = [], loading, refetch } = useFetch(async () => {
+    const leases = await leaseService.list();
+    return leases.map(normalizeLease);
+  }, [activeMallId]);
 
   const filtered = useMemo(() => {
-    let items = data || SEED_LEASES;
-    if (statusFilter) items = items.filter((l) => l.status === statusFilter);
+    let items = data || [];
+    if (statusFilter) items = items.filter((l) => l.status === statusFilter.toLowerCase());
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       items = items.filter((l) => l.tenant?.toLowerCase().includes(q) || l.shop?.toLowerCase().includes(q) || l.leaseNumber?.toLowerCase().includes(q));
@@ -134,10 +153,53 @@ export const LeaseList = () => {
 
 export const CreateLease = () => {
   const navigate = useNavigate();
+  const { activeMallId } = useMall();
   const [loading, setLoading] = useState(false);
+  const [tenantOptions, setTenantOptions] = useState([]);
+  const [shopOptions, setShopOptions] = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // Previously used raw `fetch('/api/tenants')` / `fetch('/api/shops')`,
+  // which (a) bypassed axiosClient entirely, so no Authorization header
+  // was ever sent — every call would 401 — and (b) used a bare relative
+  // path with no configured API base URL/port, so it wouldn't even reach
+  // the backend correctly outside of a same-origin dev proxy setup. Now
+  // uses the same authenticated, mall-scoped services as the rest of the
+  // app, and only offers shops that are actually AVAILABLE to lease.
+  useFetch(async () => {
+    try {
+      setLoadingOptions(true);
+      const [tenants, shops] = await Promise.all([
+        tenantService.list(),
+        shopService.list(),
+      ]);
+
+      setTenantOptions(
+        tenants.map((t) => ({
+          value: t._id,
+          label: `${t.businessName} (${t.userId?.email || ''})`,
+        }))
+      );
+      setShopOptions(
+        shops
+          .filter((s) => ['AVAILABLE', 'available', 'vacant'].includes(s.status))
+          // Was `s.rentAmount`, a field that never existed on the Shop
+          // model (the real field is `monthlyRent`) — every option label
+          // previously showed "$NaN/month".
+          .map((s) => ({
+            value: s._id,
+            label: `Shop ${s.shopNumber} - Floor ${s.floor} - ${formatCurrency(s.monthlyRent)}/month`,
+          }))
+      );
+    } catch (err) {
+      console.error('Failed to load options:', err);
+    } finally {
+      setLoadingOptions(false);
+    }
+  }, [activeMallId]);
 
   const { values, errors, handleChange, handleSubmit } = useForm(
-    { tenantId: '', shopId: '', startDate: '', endDate: '', monthlyRent: '', securityDeposit: '', paymentDueDay: '1', notes: '' },
+    { tenantId: '', shopId: '', startDate: '', endDate: '', monthlyRent: '', deposit: '', status: 'ACTIVE' },
     {
       tenantId: [(v) => (!isRequired(v) ? 'Tenant is required' : null)],
       shopId: [(v) => (!isRequired(v) ? 'Shop is required' : null)],
@@ -147,12 +209,27 @@ export const CreateLease = () => {
         (v) => (!isRequired(v) ? 'Monthly rent is required' : null),
         (v) => (!isPositiveNumber(v) ? 'Must be a positive number' : null),
       ],
+      deposit: [
+        (v) => (!isRequired(v) ? 'Deposit is required' : null),
+        (v) => (!isPositiveNumber(v) ? 'Must be a positive number' : null),
+      ],
     },
     async (vals) => {
       setLoading(true);
-      try { await leaseService.create(vals); toast.success('Lease created!'); navigate(ROUTES.LEASES); }
-      catch (err) { toast.error(err?.response?.data?.message || 'Failed to create lease'); }
-      finally { setLoading(false); }
+      try {
+        const payload = buildModelPayload(
+          vals,
+          ['tenantId', 'shopId', 'startDate', 'endDate', 'monthlyRent', 'deposit', 'status'],
+          ['monthlyRent', 'deposit']
+        );
+        await leaseService.create(payload);
+        toast.success('Lease created!');
+        navigate(ROUTES.LEASES);
+      } catch (err) {
+        toast.error(err?.response?.data?.message || 'Failed to create lease');
+      } finally {
+        setLoading(false);
+      }
     }
   );
 
@@ -162,8 +239,28 @@ export const CreateLease = () => {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card title="Lease Parties">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextInput label="Tenant ID" name="tenantId" placeholder="Search or enter tenant ID" value={values.tenantId} onChange={handleChange} error={errors.tenantId} required />
-            <TextInput label="Shop ID" name="shopId" placeholder="Search or enter shop ID" value={values.shopId} onChange={handleChange} error={errors.shopId} required />
+            <SelectInput
+              label="Tenant"
+              name="tenantId"
+              options={tenantOptions}
+              value={values.tenantId}
+              onChange={handleChange}
+              error={errors.tenantId}
+              disabled={loadingOptions}
+              placeholder={loadingOptions ? 'Loading tenants...' : 'Select a tenant'}
+              required
+            />
+            <SelectInput
+              label="Shop"
+              name="shopId"
+              options={shopOptions}
+              value={values.shopId}
+              onChange={handleChange}
+              error={errors.shopId}
+              disabled={loadingOptions}
+              placeholder={loadingOptions ? 'Loading shops...' : 'Select a shop'}
+              required
+            />
           </div>
         </Card>
         <Card title="Lease Terms">
@@ -171,16 +268,13 @@ export const CreateLease = () => {
             <TextInput label="Start Date" name="startDate" type="date" icon={Calendar} value={values.startDate} onChange={handleChange} error={errors.startDate} required />
             <TextInput label="End Date" name="endDate" type="date" icon={Calendar} value={values.endDate} onChange={handleChange} error={errors.endDate} required />
             <TextInput label="Monthly Rent ($)" name="monthlyRent" type="number" icon={DollarSign} placeholder="4500" value={values.monthlyRent} onChange={handleChange} error={errors.monthlyRent} required />
-            <TextInput label="Security Deposit ($)" name="securityDeposit" type="number" icon={DollarSign} placeholder="9000" value={values.securityDeposit} onChange={handleChange} />
-            <SelectInput label="Payment Due Day" name="paymentDueDay" value={values.paymentDueDay} onChange={handleChange}
-              options={Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}${['st','nd','rd'][i] || 'th'} of each month` }))}
-            />
-            <TextArea label="Notes" name="notes" placeholder="Any special terms or conditions..." value={values.notes} onChange={handleChange} rows={3} className="sm:col-span-2" />
+            <TextInput label="Deposit ($)" name="deposit" type="number" icon={DollarSign} placeholder="9000" value={values.deposit} onChange={handleChange} error={errors.deposit} required />
+            <SelectInput label="Status" name="status" options={STATUS_OPTIONS} value={values.status} onChange={handleChange} />
           </div>
         </Card>
         <div className="flex justify-end gap-3">
           <Button type="button" variant="secondary" onClick={() => window.history.back()}>Cancel</Button>
-          <Button type="submit" loading={loading}>Create Lease</Button>
+          <Button type="submit" loading={loading || loadingOptions}>Create Lease</Button>
         </div>
       </form>
     </>
@@ -192,7 +286,7 @@ const SEED_LEASE = { _id: 'l1', leaseNumber: 'LSE-001', tenant: 'Alice Johnson',
 export const LeaseDetails = () => {
   const { id } = useParams();
   const { data: lease, loading } = useFetch(async () => {
-    try { return await leaseService.getById(id); }
+    try { return normalizeLease(await leaseService.getById(id)); }
     catch { return SEED_LEASE; }
   }, [id]);
 
@@ -240,3 +334,4 @@ export const LeaseDetails = () => {
     </>
   );
 };
+

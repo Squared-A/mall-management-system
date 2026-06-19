@@ -1,47 +1,85 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, UserCog, Mail, Phone, User, Shield } from 'lucide-react';
-import toast from 'react-hot-toast';
-import PageHeader from '../../components/common/PageHeader';
-import Card from '../../components/common/Card';
-import Button from '../../components/common/Button';
-import SearchInput from '../../components/common/SearchInput';
-import FilterDropdown from '../../components/common/FilterDropdown';
-import DataTable from '../../components/tables/DataTable';
-import TableActions from '../../components/tables/TableActions';
-import Badge from '../../components/common/Badge';
-import Avatar from '../../components/common/Avatar';
-import TextInput from '../../components/forms/TextInput';
-import SelectInput from '../../components/forms/SelectInput';
-import TextArea from '../../components/forms/TextArea';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { useFetch } from '../../hooks/useFetch';
-import { useForm } from '../../hooks/useForm';
-import { usePagination } from '../../hooks/usePagination';
-import { useDebounce } from '../../hooks/useDebounce';
-import { staffService } from '../../services/miscServices';
-import { ROUTES } from '../../constants/routes';
-import { ROLE_LABELS, ROLES } from '../../constants/roles';
-import { formatDate } from '../../utils/formatters';
-import { isRequired, isValidEmail, isValidPhone, isValidPassword } from '../../utils/validators';
-
-const SEED_STAFF = [
-  { _id: 'st1', name: 'James Wilson', email: 'james@mms.com', phone: '+1 555 111 2222', role: 'mall_manager', mall: 'Skyline Grand Mall', status: 'active', joinedAt: '2021-03-10' },
-  { _id: 'st2', name: 'Sarah Kim', email: 'sarah@mms.com', phone: '+1 555 333 4444', role: 'accountant', mall: 'Skyline Grand Mall', status: 'active', joinedAt: '2022-06-01' },
-  { _id: 'st3', name: 'Mark Davis', email: 'mark@mms.com', phone: '+1 555 555 6666', role: 'mall_manager', mall: 'Harbor View Plaza', status: 'active', joinedAt: '2020-09-15' },
-  { _id: 'st4', name: 'Linda Chen', email: 'linda@mms.com', phone: '+1 555 777 8888', role: 'accountant', mall: 'Central Park Mall', status: 'inactive', joinedAt: '2019-12-20' },
-  { _id: 'st5', name: 'Tom Brown', email: 'tom@mms.com', phone: '+1 555 999 0000', role: 'mall_manager', mall: 'Westfield Galleria', status: 'active', joinedAt: '2023-02-14' },
-];
+import React, { useState, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Plus, UserCog, Mail, Phone, User, Shield } from "lucide-react";
+import toast from "react-hot-toast";
+import PageHeader from "../../components/common/PageHeader";
+import Card from "../../components/common/Card";
+import Button from "../../components/common/Button";
+import SearchInput from "../../components/common/SearchInput";
+import FilterDropdown from "../../components/common/FilterDropdown";
+import DataTable from "../../components/tables/DataTable";
+import TableActions from "../../components/tables/TableActions";
+import Badge from "../../components/common/Badge";
+import Avatar from "../../components/common/Avatar";
+import TextInput from "../../components/forms/TextInput";
+import SelectInput from "../../components/forms/SelectInput";
+import TextArea from "../../components/forms/TextArea";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import { useFetch } from "../../hooks/useFetch";
+import { useForm } from "../../hooks/useForm";
+import { usePagination } from "../../hooks/usePagination";
+import { useDebounce } from "../../hooks/useDebounce";
+import { staffService } from "../../services/miscServices";
+import { useMall } from "../../context/MallContext";
+import { useAuth } from "../../hooks/useAuth";
+import { ROUTES } from "../../constants/routes";
+import { ROLE_LABELS, ROLES } from "../../constants/roles";
+import { formatDate } from "../../utils/formatters";
+import {
+  isRequired,
+  isValidEmail,
+  isValidPhone,
+  isValidPassword,
+} from "../../utils/validators";
 
 const ROLE_OPTIONS = [
   { value: ROLES.MALL_MANAGER, label: ROLE_LABELS[ROLES.MALL_MANAGER] },
   { value: ROLES.ACCOUNTANT, label: ROLE_LABELS[ROLES.ACCOUNTANT] },
 ];
 
+const ACCOUNTANT_ROLE_OPTIONS = [
+  { value: ROLES.ACCOUNTANT, label: ROLE_LABELS[ROLES.ACCOUNTANT] },
+];
+
+const ROLE_TO_POSITION = {
+  [ROLES.MALL_MANAGER]: "manager",
+  [ROLES.ACCOUNTANT]: "accountant",
+};
+
+const POSITION_TO_ROLE = {
+  manager: ROLES.MALL_MANAGER,
+  accountant: ROLES.ACCOUNTANT,
+};
+
+const normalizeStaff = (staff = {}) => ({
+  ...staff,
+  name: staff.name || staff.fullName || "",
+  role: staff.role || POSITION_TO_ROLE[staff.position] || staff.position || "",
+  mall: staff.mall || staff.mallName || staff.mallId?.name || "",
+  mallId: staff.mallId?._id || staff.mallId || "",
+  joinedAt: staff.joinedAt || staff.createdAt,
+  status: staff.status || (staff.isDeleted ? "inactive" : "active"),
+});
+
+const buildStaffPayload = (values, { includePassword = false } = {}) => {
+  const payload = {
+    fullName: values.name,
+    email: values.email,
+    phone: values.phone,
+    position: ROLE_TO_POSITION[values.role] || values.role,
+    mallId: values.mallId,
+  };
+
+  if (includePassword) {
+    payload.password = values.password;
+  }
+
+  return payload;
+};
 const STATUS_FILTER_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
 ];
 
 /* ─────────────────────────────────────────────
@@ -49,41 +87,54 @@ const STATUS_FILTER_OPTIONS = [
 ───────────────────────────────────────────── */
 export const StaffList = () => {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const { activeMallId } = useMall();
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading, refetch } = useFetch(async () => {
-    try { return await staffService.list(); }
-    catch { return SEED_STAFF; }
-  }, []);
+  const {
+    data = [],
+    loading,
+    refetch,
+  } = useFetch(async () => {
+    const staff = await staffService.list();
+    return staff.map(normalizeStaff);
+  }, [activeMallId]);
 
   const filtered = useMemo(() => {
-    let items = data || SEED_STAFF;
+    let items = data || [];
     if (roleFilter) items = items.filter((s) => s.role === roleFilter);
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
-      items = items.filter((s) =>
-        s.name?.toLowerCase().includes(q) ||
-        s.email?.toLowerCase().includes(q) ||
-        s.mall?.toLowerCase().includes(q)
+      items = items.filter(
+        (s) =>
+          s.name?.toLowerCase().includes(q) ||
+          s.email?.toLowerCase().includes(q) ||
+          s.mall?.toLowerCase().includes(q),
       );
     }
     return items;
   }, [data, debouncedSearch, roleFilter]);
 
-  const { paginatedItems, page, pageSize, totalPages, goToPage, changePageSize } = usePagination(filtered);
+  const {
+    paginatedItems,
+    page,
+    pageSize,
+    totalPages,
+    goToPage,
+    changePageSize,
+  } = usePagination(filtered);
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
       await staffService.remove(deleteTarget._id);
-      toast.success('Staff member removed');
+      toast.success("Staff member removed");
       refetch();
     } catch {
-      toast.error('Failed to remove staff member');
+      toast.error("Failed to remove staff member");
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -92,41 +143,47 @@ export const StaffList = () => {
 
   const columns = [
     {
-      key: 'name',
-      header: 'Staff Member',
+      key: "name",
+      header: "Staff Member",
       sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <Avatar name={row.name} size="sm" />
           <div>
-            <p className="font-medium text-gray-800 dark:text-gray-100">{row.name}</p>
+            <p className="font-medium text-gray-800 dark:text-gray-100">
+              {row.name}
+            </p>
             <p className="text-xs text-gray-400">{row.email}</p>
           </div>
         </div>
       ),
     },
-    { key: 'phone', header: 'Phone' },
+    { key: "phone", header: "Phone" },
     {
-      key: 'role',
-      header: 'Role',
+      key: "role",
+      header: "Role",
       render: (row) => (
         <span className="badge-info">{ROLE_LABELS[row.role] || row.role}</span>
       ),
     },
-    { key: 'mall', header: 'Assigned Mall' },
+    { key: "mall", header: "Assigned Mall" },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (row) => <Badge status={row.status} />,
     },
-    { key: 'joinedAt', header: 'Joined', render: (row) => formatDate(row.joinedAt) },
     {
-      key: 'actions',
-      header: '',
-      className: 'w-24',
+      key: "joinedAt",
+      header: "Joined",
+      render: (row) => formatDate(row.joinedAt),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "w-24",
       render: (row) => (
         <TableActions
-          onEdit={() => navigate(ROUTES.STAFF_EDIT.replace(':id', row._id))}
+          onEdit={() => navigate(ROUTES.STAFF_EDIT.replace(":id", row._id))}
           onDelete={() => setDeleteTarget(row)}
         />
       ),
@@ -137,8 +194,8 @@ export const StaffList = () => {
     <>
       <PageHeader
         title="Staff Management"
-        subtitle={`${filtered.length} staff member${filtered.length !== 1 ? 's' : ''}`}
-        breadcrumbs={[{ label: 'Staff' }]}
+        subtitle={`${filtered.length} staff member${filtered.length !== 1 ? "s" : ""}`}
+        breadcrumbs={[{ label: "Staff" }]}
         actions={
           <Button icon={Plus} onClick={() => navigate(ROUTES.STAFF_ADD)}>
             Add Staff
@@ -194,33 +251,50 @@ export const StaffList = () => {
 /* ─────────────────────────────────────────────
    Shared Staff Form
 ───────────────────────────────────────────── */
-const StaffForm = ({ initialValues = {}, onSubmit, loading, submitLabel, isEdit = false }) => {
+const StaffForm = ({
+  initialValues = {},
+  onSubmit,
+  loading,
+  submitLabel,
+  isEdit = false,
+}) => {
+  const { malls, activeMallId } = useMall();
+  const { role: currentUserRole } = useAuth();
+  const canCreateOnlyAccountants = currentUserRole === ROLES.MALL_MANAGER;
+  const roleOptions = canCreateOnlyAccountants && !isEdit ? ACCOUNTANT_ROLE_OPTIONS : ROLE_OPTIONS;
+
   const defaults = {
-    name: '',
-    email: '',
-    phone: '',
-    role: ROLES.MALL_MANAGER,
-    mallId: '',
-    password: '',
-    notes: '',
+    name: "",
+    email: "",
+    phone: "",
+    role: canCreateOnlyAccountants && !isEdit ? ROLES.ACCOUNTANT : ROLES.MALL_MANAGER,
+    mallId: activeMallId || "",
+    password: "",
+    notes: "",
     ...initialValues,
   };
 
   const rules = {
-    name: [(v) => (!isRequired(v) ? 'Full name is required' : null)],
-    email: [(v) => (!isRequired(v) ? 'Email is required' : null)],
-    phone: [(v) => (!isRequired(v) ? 'Phone is required' : null)],
-    role: [(v) => (!isRequired(v) ? 'Role is required' : null)],
+    name: [(v) => (!isRequired(v) ? "Full name is required" : null)],
+    email: [(v) => (!isRequired(v) ? "Email is required" : null)],
+    phone: [(v) => (!isRequired(v) ? "Phone is required" : null)],
+    role: [(v) => (!isRequired(v) ? "Role is required" : null)],
+    mallId: [(v) => (!isRequired(v) ? "Assigned mall is required" : null)],
   };
 
   if (!isEdit) {
     rules.password = [
-      (v) => (!isRequired(v) ? 'Password is required' : null),
-      (v) => (!isValidPassword(v) ? 'Password must be at least 8 characters' : null),
+      (v) => (!isRequired(v) ? "Password is required" : null),
+      (v) =>
+        !isValidPassword(v) ? "Password must be at least 8 characters" : null,
     ];
   }
 
-  const { values, errors, handleChange, handleSubmit } = useForm(defaults, rules, onSubmit);
+  const { values, errors, handleChange, handleSubmit } = useForm(
+    defaults,
+    rules,
+    onSubmit,
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -282,19 +356,21 @@ const StaffForm = ({ initialValues = {}, onSubmit, loading, submitLabel, isEdit 
             label="Role"
             name="role"
             icon={Shield}
-            options={ROLE_OPTIONS}
+            options={roleOptions}
             value={values.role}
             onChange={handleChange}
             error={errors.role}
             required
           />
-          <TextInput
-            label="Assigned Mall ID"
+          <SelectInput
+            label="Assigned Mall"
             name="mallId"
-            placeholder="Search or enter mall ID"
+            options={malls.map((m) => ({ value: m._id, label: m.name }))}
             value={values.mallId}
             onChange={handleChange}
-            helperText="Leave blank to assign to all malls."
+            error={errors.mallId}
+            placeholder="Select a mall"
+            required
           />
           <TextArea
             label="Notes"
@@ -309,7 +385,11 @@ const StaffForm = ({ initialValues = {}, onSubmit, loading, submitLabel, isEdit 
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={() => window.history.back()}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => window.history.back()}
+        >
           Cancel
         </Button>
         <Button type="submit" loading={loading}>
@@ -330,11 +410,13 @@ export const AddStaff = () => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      await staffService.create(values);
-      toast.success('Staff member added!');
+      const payload = buildStaffPayload(values, { includePassword: true });
+      const resp = await staffService.create(payload);
+      console.log(resp);
+      toast.success("Staff member added!");
       navigate(ROUTES.STAFF);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to add staff member');
+      toast.error(err?.response?.data?.message || "Failed to add staff member");
     } finally {
       setLoading(false);
     }
@@ -345,9 +427,16 @@ export const AddStaff = () => {
       <PageHeader
         title="Add Staff Member"
         subtitle="Create an account for a new staff member"
-        breadcrumbs={[{ label: 'Staff', to: ROUTES.STAFF }, { label: 'Add Staff' }]}
+        breadcrumbs={[
+          { label: "Staff", to: ROUTES.STAFF },
+          { label: "Add Staff" },
+        ]}
       />
-      <StaffForm onSubmit={handleSubmit} loading={loading} submitLabel="Add Staff Member" />
+      <StaffForm
+        onSubmit={handleSubmit}
+        loading={loading}
+        submitLabel="Add Staff Member"
+      />
     </>
   );
 };
@@ -361,18 +450,24 @@ export const EditStaff = () => {
   const [saving, setSaving] = useState(false);
 
   const { data: staff, loading } = useFetch(async () => {
-    try { return await staffService.getById(id); }
-    catch { return SEED_STAFF.find((s) => s._id === id) || SEED_STAFF[0]; }
+    try {
+      return normalizeStaff(await staffService.getById(id));
+    } catch {
+      return SEED_STAFF.find((s) => s._id === id) || SEED_STAFF[0];
+    }
   }, [id]);
 
   const handleSubmit = async (values) => {
     setSaving(true);
     try {
-      await staffService.update(id, values);
-      toast.success('Staff member updated!');
+      const payload = buildStaffPayload(values);
+      await staffService.update(id, payload);
+      toast.success("Staff member updated!");
       navigate(ROUTES.STAFF);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to update staff member');
+      toast.error(
+        err?.response?.data?.message || "Failed to update staff member",
+      );
     } finally {
       setSaving(false);
     }
@@ -386,9 +481,9 @@ export const EditStaff = () => {
         title="Edit Staff Member"
         subtitle={`Editing profile for "${staff?.name}"`}
         breadcrumbs={[
-          { label: 'Staff', to: ROUTES.STAFF },
-          { label: staff?.name || 'Staff Member' },
-          { label: 'Edit' },
+          { label: "Staff", to: ROUTES.STAFF },
+          { label: staff?.name || "Staff Member" },
+          { label: "Edit" },
         ]}
       />
       <StaffForm
@@ -401,3 +496,8 @@ export const EditStaff = () => {
     </>
   );
 };
+
+
+
+
+

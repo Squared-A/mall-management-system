@@ -14,9 +14,24 @@ import { useFetch } from '../../hooks/useFetch';
 import { usePagination } from '../../hooks/usePagination';
 import { useDebounce } from '../../hooks/useDebounce';
 import { shopService } from '../../services/shopService';
+import { useMall } from '../../context/MallContext';
 import { ROUTES } from '../../constants/routes';
 import { formatCurrency } from '../../utils/formatters';
 
+const normalizeStatus = (status) => {
+  const normalized = String(status || '').toLowerCase();
+  return normalized === 'available' ? 'vacant' : normalized;
+};
+
+const normalizeShop = (shop = {}) => ({
+  ...shop,
+  name: shop.name || shop.category || `Shop ${shop.shopNumber ?? ''}`.trim(),
+  mallName: shop.mallName || shop.mallId?.name || '',
+  size: shop.size ?? 0,
+  rent: shop.rent ?? shop.monthlyRent ?? 0,
+  tenant: shop.tenant || shop.tenantId?.businessName || '',
+  status: normalizeStatus(shop.status),
+});
 const SEED_SHOPS = [
   { _id: 's1', shopNumber: '101', name: 'Urban Eats', floor: 1, size: 450, rent: 4500, status: 'occupied', mallName: 'Skyline Grand Mall', tenant: 'Fresh Foods Inc.' },
   { _id: 's2', shopNumber: '102', name: 'TechZone', floor: 1, size: 320, rent: 3800, status: 'occupied', mallName: 'Skyline Grand Mall', tenant: 'Tech Hub Ltd.' },
@@ -36,29 +51,32 @@ const STATUS_OPTIONS = [
 
 const ShopList = () => {
   const navigate = useNavigate();
+  const { activeMallId } = useMall();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading, refetch } = useFetch(async () => {
-    try {
-      return await shopService.list();
-    } catch {
-      return SEED_SHOPS;
-    }
-  }, []);
+  // Previously fetched once with an empty dependency array, so switching
+  // the active mall (now possible via MallSelector) never refreshed this
+  // list — an owner viewing Mall B's shops would keep seeing Mall A's
+  // results until a full page reload.
+  const { data = [], loading, refetch } = useFetch(async () => {
+    const shops = await shopService.list();
+    return shops.map(normalizeShop);
+  }, [activeMallId]);
 
   const filtered = useMemo(() => {
-    let items = data || SEED_SHOPS;
+    let items = data || [];
     if (statusFilter) items = items.filter((s) => s.status === statusFilter);
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       items = items.filter((s) =>
         s.name?.toLowerCase().includes(q) ||
-        s.shopNumber?.toLowerCase().includes(q) ||
-        s.mallName?.toLowerCase().includes(q)
+        String(s.shopNumber || '').toLowerCase().includes(q) ||
+        s.mallName?.toLowerCase().includes(q) ||
+        s.tenant?.toLowerCase().includes(q)
       );
     }
     return items;
@@ -172,3 +190,5 @@ const ShopList = () => {
 };
 
 export default ShopList;
+
+

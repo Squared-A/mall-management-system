@@ -34,16 +34,12 @@ const MallList = () => {
   const [deleting, setDeleting] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading, error, refetch } = useFetch(async () => {
-    try {
-      return await mallService.list();
-    } catch {
-      return SEED_MALLS;
-    }
+  const { data = [], loading, error, refetch } = useFetch(async () => {
+    return await mallService.list();
   }, []);
 
   const filtered = useMemo(() => {
-    const items = data || SEED_MALLS;
+    const items = data || [];
     if (!debouncedSearch) return items;
     const q = debouncedSearch.toLowerCase();
     return items.filter(

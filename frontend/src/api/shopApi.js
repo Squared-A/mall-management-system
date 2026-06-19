@@ -1,9 +1,9 @@
-import axiosClient from './axiosClient';
+import axiosClient from "./axiosClient";
 
 export const shopApi = {
-  getAll: (params) => axiosClient.get('/shops', { params }),
+  getAll: () => axiosClient.get("/shops"),
   getById: (id) => axiosClient.get(`/shops/${id}`),
-  create: (payload) => axiosClient.post('/shops', payload),
+  create: (payload) => axiosClient.post("/shops/register", payload),
   update: (id, payload) => axiosClient.put(`/shops/${id}`, payload),
   remove: (id) => axiosClient.delete(`/shops/${id}`),
 };

@@ -1,16 +1,26 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { ChevronDown, ChevronsLeft, ChevronsRight, Building2, X } from 'lucide-react';
-import clsx from 'clsx';
-import { NAV_ITEMS } from '../../routes/navConfig';
-import { useAuth } from '../../hooks/useAuth';
-import { toggleSidebar, closeMobileSidebar } from '../../store/slices/uiSlice';
-import { APP_NAME } from '../../constants';
+import React, { useState } from "react";
+import { NavLink } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import {
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  Building2,
+  X,
+} from "lucide-react";
+import clsx from "clsx";
+import { NAV_ITEMS } from "../../routes/navConfig";
+import { useAuth } from "../../hooks/useAuth";
+import { toggleSidebar, closeMobileSidebar } from "../../store/slices/uiSlice";
+import { APP_NAME } from "../../constants";
 
 const SidebarLink = ({ item, collapsed }) => {
   const [open, setOpen] = useState(false);
-  const hasChildren = item.children?.length > 0;
+  const { role } = useAuth();
+  const visibleChildren = item.children?.filter(
+    (child) => !child.roles || child.roles.includes(role),
+  );
+  const hasChildren = visibleChildren?.length > 0;
 
   if (hasChildren) {
     return (
@@ -18,30 +28,35 @@ const SidebarLink = ({ item, collapsed }) => {
         <button
           onClick={() => setOpen((o) => !o)}
           className={clsx(
-            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
           )}
         >
           <item.icon className="h-5 w-5 shrink-0" />
           {!collapsed && (
             <>
               <span className="flex-1 text-left">{item.label}</span>
-              <ChevronDown className={clsx('h-4 w-4 transition-transform', open && 'rotate-180')} />
+              <ChevronDown
+                className={clsx(
+                  "h-4 w-4 transition-transform",
+                  open && "rotate-180",
+                )}
+              />
             </>
           )}
         </button>
         {!collapsed && open && (
           <div className="mt-1 ml-8 space-y-1 border-l border-gray-100 dark:border-gray-800 pl-3">
-            {item.children.map((child) => (
+            {visibleChildren.map((child) => (
               <NavLink
                 key={child.to}
                 to={child.to}
                 end
                 className={({ isActive }) =>
                   clsx(
-                    'block rounded-lg px-3 py-2 text-sm transition-colors',
+                    "block rounded-lg px-3 py-2 text-sm transition-colors",
                     isActive
-                      ? 'text-primary-600 font-medium bg-primary-50 dark:bg-primary-500/10'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                      ? "text-primary-600 font-medium bg-primary-50 dark:bg-primary-500/10"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
                   )
                 }
               >
@@ -60,10 +75,10 @@ const SidebarLink = ({ item, collapsed }) => {
       end
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
           isActive
-            ? 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+            ? "bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400"
+            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800",
         )
       }
     >
@@ -77,7 +92,9 @@ const SidebarContent = ({ collapsed, onToggleCollapse, isMobile }) => {
   const { role } = useAuth();
   const dispatch = useDispatch();
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !item.roles || item.roles.includes(role),
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -87,7 +104,9 @@ const SidebarContent = ({ collapsed, onToggleCollapse, isMobile }) => {
             <Building2 className="h-5 w-5" />
           </div>
           {!collapsed && (
-            <span className="truncate text-base font-bold text-gray-900 dark:text-gray-50">{APP_NAME}</span>
+            <span className="truncate text-base font-bold text-gray-900 dark:text-gray-50">
+              {APP_NAME}
+            </span>
           )}
         </div>
         {isMobile ? (
@@ -102,7 +121,11 @@ const SidebarContent = ({ collapsed, onToggleCollapse, isMobile }) => {
             onClick={onToggleCollapse}
             className="hidden lg:flex rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+            {collapsed ? (
+              <ChevronsRight className="h-4 w-4" />
+            ) : (
+              <ChevronsLeft className="h-4 w-4" />
+            )}
           </button>
         )}
       </div>
@@ -129,18 +152,23 @@ const SidebarContent = ({ collapsed, onToggleCollapse, isMobile }) => {
 
 const Sidebar = () => {
   const dispatch = useDispatch();
-  const { sidebarCollapsed, mobileSidebarOpen } = useSelector((state) => state.ui);
+  const { sidebarCollapsed, mobileSidebarOpen } = useSelector(
+    (state) => state.ui,
+  );
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside
         className={clsx(
-          'hidden lg:flex lg:flex-col border-r border-gray-100 dark:border-gray-800 bg-sidebar-light dark:bg-sidebar-dark transition-all duration-200 shrink-0',
-          sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-64'
+          "hidden lg:flex lg:flex-col border-r border-gray-100 dark:border-gray-800 bg-sidebar-light dark:bg-sidebar-dark transition-all duration-200 shrink-0",
+          sidebarCollapsed ? "lg:w-[76px]" : "lg:w-64",
         )}
       >
-        <SidebarContent collapsed={sidebarCollapsed} onToggleCollapse={() => dispatch(toggleSidebar())} />
+        <SidebarContent
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => dispatch(toggleSidebar())}
+        />
       </aside>
 
       {/* Mobile sidebar overlay */}

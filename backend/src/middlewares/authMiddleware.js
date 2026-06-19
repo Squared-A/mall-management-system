@@ -7,14 +7,22 @@ const verifyToken = (req, res, next) => {
   if (!token) {
     return res
       .status(401)
-      .json({ message: "Access denied. No token provided." });
+      .json({ success: false, message: "Access denied. No token provided." });
   }
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET);
+    // Reject refresh tokens presented as access tokens.
+    if (decoded.purpose === "refresh") {
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid token." });
+    }
     req.user = decoded;
     next();
   } catch (error) {
-    return res.status(400).json({ message: "Invalid token." });
+    const message =
+      error.name === "TokenExpiredError" ? "Token expired." : "Invalid token.";
+    return res.status(401).json({ success: false, message });
   }
 };
 

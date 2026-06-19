@@ -27,11 +27,9 @@ const mallSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true,
   },
   logo: {
     type: String,
-    required: true,
   },
   status: {
     type: String,

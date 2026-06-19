@@ -3,19 +3,19 @@ import { mallApi } from '../api/mallApi';
 export const mallService = {
   async list(params) {
     const { data } = await mallApi.getAll(params);
-    return data.data || data;
+    return data.result || data.data || [];
   },
   async getById(id) {
     const { data } = await mallApi.getById(id);
-    return data.data || data;
+    return data.result || data.data || {};
   },
   async create(payload) {
     const { data } = await mallApi.create(payload);
-    return data.data || data;
+    return data.result || data.data || {};
   },
   async update(id, payload) {
     const { data } = await mallApi.update(id, payload);
-    return data.data || data;
+    return data.result || data.data || {};
   },
   async remove(id) {
     const { data } = await mallApi.remove(id);
@@ -23,6 +23,6 @@ export const mallService = {
   },
   async getStats(id) {
     const { data } = await mallApi.getStats(id);
-    return data.data || data;
+    return data.result || data.data || {};
   },
 };

@@ -1,25 +1,43 @@
-import axios from 'axios';
-import { API_BASE_URL, TOKEN_KEY, REFRESH_TOKEN_KEY } from '../constants';
-import { storage } from '../utils/storage';
+import axios from "axios";
+import { API_BASE_URL, TOKEN_KEY, REFRESH_TOKEN_KEY } from "../constants";
+import { storage } from "../utils/storage";
+
+const ACTIVE_MALL_KEY = "mms_active_mall_id";
 
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   timeout: 30000,
 });
 
-// Attach access token to every outgoing request
 axiosClient.interceptors.request.use(
   (config) => {
     const token = storage.get(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const activeMallId = storage.get(ACTIVE_MALL_KEY);
+    const shouldAttachMallId =
+      activeMallId && !String(config.url || '').startsWith('/malls');
+    if (shouldAttachMallId) {
+      if (config.method === "get" || config.method === "delete") {
+        config.params = { mallId: activeMallId, ...config.params };
+      } else if (
+        config.data &&
+        typeof config.data === "object" &&
+        !(config.data instanceof FormData) &&
+        config.data.mallId === undefined
+      ) {
+        config.data = { mallId: activeMallId, ...config.data };
+      }
+    }
+
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 let isRefreshing = false;
@@ -59,7 +77,7 @@ axiosClient.interceptors.response.use(
 
       try {
         const refreshToken = storage.get(REFRESH_TOKEN_KEY);
-        if (!refreshToken) throw new Error('No refresh token');
+        if (!refreshToken) throw new Error("No refresh token");
 
         const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
           refreshToken,
@@ -75,7 +93,7 @@ axiosClient.interceptors.response.use(
         processQueue(refreshError, null);
         storage.remove(TOKEN_KEY);
         storage.remove(REFRESH_TOKEN_KEY);
-        window.location.href = '/login';
+        window.location.href = "/login";
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -83,7 +101,8 @@ axiosClient.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default axiosClient;
+

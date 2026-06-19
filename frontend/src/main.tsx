@@ -6,16 +6,18 @@ import { Toaster } from 'react-hot-toast';
 import App from './App.jsx';
 import { store } from './store/store.js';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { MallProvider } from './context/MallContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
+import './index.css';
 import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <Provider store={store}>
-      <ThemeProvider>
-        <BrowserRouter>
-          <AuthProvider>
+  <Provider store={store}>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <MallProvider>
             <NotificationProvider>
               <App />
               <Toaster
@@ -28,9 +30,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 }}
               />
             </NotificationProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </ThemeProvider>
-    </Provider>
-  </React.StrictMode>
+          </MallProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
+  </Provider>
 );

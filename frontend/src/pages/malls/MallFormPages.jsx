@@ -7,6 +7,8 @@ import MallForm from './MallForm';
 import { mallService } from '../../services/mallService';
 import { useFetch } from '../../hooks/useFetch';
 import { ROUTES } from '../../constants/routes';
+import { buildModelPayload } from '../../utils/payload';
+import { useAuth } from '../../hooks/useAuth';
 
 export const AddMall = () => {
   const navigate = useNavigate();
@@ -15,7 +17,7 @@ export const AddMall = () => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      await mallService.create(values);
+      await mallService.create(buildModelPayload(values, ['name', 'address', 'city', 'floors', 'totalShops', 'description', 'logo', 'status'], ['floors', 'totalShops']));
       toast.success('Mall created successfully!');
       navigate(ROUTES.MALLS);
     } catch (err) {
@@ -41,6 +43,7 @@ export const EditMall = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
 
   const { data: mall, loading } = useFetch(
     async () => {
@@ -69,7 +72,7 @@ export const EditMall = () => {
   const handleSubmit = async (values) => {
     setSaving(true);
     try {
-      await mallService.update(id, values);
+      await mallService.update(id, user?.role === 'super_admin' ? { status: values.status } : buildModelPayload(values, ['name', 'address', 'city', 'floors', 'totalShops', 'description', 'logo', 'status'], ['floors', 'totalShops']));
       toast.success('Mall updated successfully!');
       navigate(ROUTES.MALLS);
     } catch (err) {
@@ -101,3 +104,4 @@ export const EditMall = () => {
     </>
   );
 };
+

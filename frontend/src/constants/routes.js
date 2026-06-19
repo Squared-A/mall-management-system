@@ -47,7 +47,12 @@ export const ROUTES = {
   STAFF_ADD: '/staff/add',
   STAFF_EDIT: '/staff/:id/edit',
 
+  // Expenses
+  EXPENSES: '/expenses',
+  EXPENSE_ADD: '/expenses/add',
+
   // Reports
+  REPORTS_PLATFORM: '/reports/platform',
   REPORTS_REVENUE: '/reports/revenue',
   REPORTS_OCCUPANCY: '/reports/occupancy',
   REPORTS_EXPENSE: '/reports/expense',

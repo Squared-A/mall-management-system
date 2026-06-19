@@ -16,11 +16,25 @@ import { useFetch } from '../../hooks/useFetch';
 import { useForm } from '../../hooks/useForm';
 import { useDebounce } from '../../hooks/useDebounce';
 import { announcementService } from '../../services/miscServices';
+import { useMall } from '../../context/MallContext';
 import { ROUTES } from '../../constants/routes';
-import { isRequired } from '../../utils/validators';
 import { formatDateTime } from '../../utils/formatters';
 import clsx from 'clsx';
 
+const normalizeAnnouncement = (announcement = {}) => {
+  const createdBy = announcement.createdBy;
+  return {
+    ...announcement,
+    content: announcement.content || announcement.message || '',
+    message: announcement.message || announcement.content || '',
+    audience: announcement.audience || announcement.targetRole || 'all',
+    createdBy:
+      announcement.createdByName ||
+      createdBy?.fullName ||
+      createdBy?.name ||
+      (typeof createdBy === 'string' ? createdBy : 'System'),
+  };
+};
 const SEED_ANNOUNCEMENTS = [
   { _id: 'an1', title: 'Mall Renovation - Wing A Closure', content: 'Wing A will be temporarily closed for renovation from November 15–30. All affected tenants have been individually notified. We apologize for any inconvenience.', audience: 'all', priority: 'high', createdBy: 'Mall Manager', createdAt: '2024-11-01T09:00:00Z', pinned: true },
   { _id: 'an2', title: 'Holiday Trading Hours', content: 'Extended trading hours will be in effect from December 20 to January 5. All shops must comply with the updated schedule. Full details attached.', audience: 'tenants', priority: 'medium', createdBy: 'Mall Manager', createdAt: '2024-10-28T14:30:00Z', pinned: false },
@@ -30,15 +44,10 @@ const SEED_ANNOUNCEMENTS = [
 
 const AUDIENCE_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'tenants', label: 'Tenants Only' },
-  { value: 'staff', label: 'Staff Only' },
-  { value: 'managers', label: 'Managers Only' },
-];
-
-const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
+  { value: 'MALL_OWNER', label: 'Owners Only' },
+  { value: 'TENANT', label: 'Tenants Only' },
+  { value: 'MALL_MANAGER', label: 'Managers Only' },
+  { value: 'ACCOUNTANT', label: 'Accountants Only' },
 ];
 
 const PRIORITY_COLORS = {
@@ -50,23 +59,24 @@ const PRIORITY_COLORS = {
 /* ─────────── Announcement List ─────────── */
 export const AnnouncementList = () => {
   const navigate = useNavigate();
+  const { activeMallId } = useMall();
   const [search, setSearch] = useState('');
   const [audienceFilter, setAudienceFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const debouncedSearch = useDebounce(search);
 
-  const { data, loading, refetch } = useFetch(async () => {
-    try { return await announcementService.list(); }
-    catch { return SEED_ANNOUNCEMENTS; }
-  }, []);
+  const { data = [], loading, refetch } = useFetch(async () => {
+    const announcements = await announcementService.list();
+    return announcements.map(normalizeAnnouncement);
+  }, [activeMallId]);
 
   const filtered = useMemo(() => {
-    let items = data || SEED_ANNOUNCEMENTS;
-    if (audienceFilter) items = items.filter((a) => a.audience === audienceFilter);
+    let items = data || [];
+    if (audienceFilter) items = items.filter((a) => (a.targetRole || a.audience) === audienceFilter);
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
-      items = items.filter((a) => a.title?.toLowerCase().includes(q) || a.content?.toLowerCase().includes(q));
+      items = items.filter((a) => a.title?.toLowerCase().includes(q) || (a.message || a.content)?.toLowerCase().includes(q));
     }
     // Pinned first
     return [...items].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
@@ -135,10 +145,10 @@ export const AnnouncementList = () => {
                       </span>
                     )}
                     <Badge status={ann.priority} />
-                    <span className="badge-gray capitalize">{ann.audience}</span>
+                    <span className="badge-gray capitalize">{ann.targetRole || ann.audience}</span>
                   </div>
                   <h3 className="text-base font-semibold text-gray-900 dark:text-gray-50">{ann.title}</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{ann.content}</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{ann.message || ann.content}</p>
                   <p className="mt-2 text-xs text-gray-400">
                     By {ann.createdBy} · {formatDateTime(ann.createdAt)}
                   </p>
@@ -175,15 +185,17 @@ export const CreateAnnouncement = () => {
   const [loading, setLoading] = useState(false);
 
   const { values, errors, handleChange, handleSubmit } = useForm(
-    { title: '', content: '', audience: 'all', priority: 'medium', pinned: false },
-    {
-      title: [(v) => (!isRequired(v) ? 'Title is required' : null)],
-      content: [(v) => (!isRequired(v) ? 'Content is required' : null)],
-    },
+    { title: '', message: '', targetRole: 'all' },
+    {},
     async (vals) => {
       setLoading(true);
       try {
-        await announcementService.create(vals);
+        const payload = {
+          title: vals.title,
+          message: vals.message,
+          targetRole: vals.targetRole,
+        };
+        await announcementService.create(payload);
         toast.success('Announcement published!');
         navigate(ROUTES.ANNOUNCEMENTS);
       } catch (err) {
@@ -212,74 +224,30 @@ export const CreateAnnouncement = () => {
               placeholder="Brief, descriptive title"
               value={values.title}
               onChange={handleChange}
-              error={errors.title}
-              required
+
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <SelectInput
-                label="Audience"
-                name="audience"
+                label="Target Role"
+                name="targetRole"
                 options={AUDIENCE_OPTIONS}
-                value={values.audience}
-                onChange={handleChange}
-              />
-              <SelectInput
-                label="Priority"
-                name="priority"
-                options={PRIORITY_OPTIONS}
-                value={values.priority}
+                value={values.targetRole}
                 onChange={handleChange}
               />
             </div>
 
             <TextArea
-              label="Content"
-              name="content"
+              label="Message"
+              name="message"
               placeholder="Write the full announcement content here..."
-              value={values.content}
+              value={values.message}
               onChange={handleChange}
-              error={errors.content}
               rows={6}
-              required
             />
 
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                name="pinned"
-                checked={values.pinned}
-                onChange={handleChange}
-                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Pin this announcement</p>
-                <p className="text-xs text-gray-400">Pinned announcements appear at the top of the list.</p>
-              </div>
-            </label>
           </div>
         </Card>
-
-        {/* Preview */}
-        {values.title && (
-          <Card title="Preview">
-            <div className={clsx('rounded-xl border-l-4 p-4', PRIORITY_COLORS[values.priority] || PRIORITY_COLORS.low)}>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {values.pinned && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-medium text-primary-600">
-                    <Pin className="h-3 w-3" /> Pinned
-                  </span>
-                )}
-                <Badge status={values.priority} />
-                <span className="badge-gray capitalize">{values.audience}</span>
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-50">{values.title}</h3>
-              {values.content && (
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 line-clamp-3">{values.content}</p>
-              )}
-            </div>
-          </Card>
-        )}
 
         <div className="flex justify-end gap-3">
           <Button type="button" variant="secondary" onClick={() => window.history.back()}>
@@ -293,3 +261,5 @@ export const CreateAnnouncement = () => {
     </>
   );
 };
+
+

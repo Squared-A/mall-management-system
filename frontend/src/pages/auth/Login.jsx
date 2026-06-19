@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
-import { useForm } from '../../hooks/useForm';
-import TextInput from '../../components/forms/TextInput';
-import { Checkbox } from '../../components/forms/Checkbox';
-import Button from '../../components/common/Button';
-import { ROUTES } from '../../constants/routes';
-import { isRequired, isValidEmail } from '../../utils/validators';
+import React, { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { useForm } from "../../hooks/useForm";
+import TextInput from "../../components/forms/TextInput";
+import { Checkbox } from "../../components/forms/Checkbox";
+import Button from "../../components/common/Button";
+import { ROUTES } from "../../constants/routes";
+import { isRequired, isValidEmail } from "../../utils/validators";
 
 const Login = () => {
   const { login, loading } = useAuth();
@@ -16,24 +16,28 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const { values, errors, handleChange, handleSubmit } = useForm(
-    { email: '', password: '', remember: true },
+    { email: "", password: "", remember: true },
     {
       email: [
-        (v) => (!isRequired(v) ? 'Email is required' : null),
-        (v) => (!isValidEmail(v) ? 'Enter a valid email address' : null),
+        (v) => (!isRequired(v) ? "Email is required" : null),
+        (v) => (!isValidEmail(v) ? "Enter a valid email address" : null),
       ],
-      password: [(v) => (!isRequired(v) ? 'Password is required' : null)],
+      password: [(v) => (!isRequired(v) ? "Password is required" : null)],
     },
     async (vals) => {
-      await login(vals);
+      console.log(vals);
+      const resp = await login(vals);
+      console.log(resp);
       const redirectTo = location.state?.from?.pathname || ROUTES.DASHBOARD;
       navigate(redirectTo, { replace: true });
-    }
+    },
   );
 
   return (
     <div className="animate-fadeIn">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50">Welcome back</h2>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+        Welcome back
+      </h2>
       <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
         Sign in to your account to manage your mall operations.
       </p>
@@ -56,7 +60,7 @@ const Login = () => {
             <TextInput
               label="Password"
               name="password"
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               icon={Lock}
               placeholder="••••••••"
               value={values.password}
@@ -70,7 +74,11 @@ const Login = () => {
               className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               tabIndex={-1}
             >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </button>
           </div>
         </div>
@@ -82,7 +90,10 @@ const Login = () => {
             checked={values.remember}
             onChange={handleChange}
           />
-          <Link to={ROUTES.FORGOT_PASSWORD} className="text-sm font-medium text-primary-600 hover:underline">
+          <Link
+            to={ROUTES.FORGOT_PASSWORD}
+            className="text-sm font-medium text-primary-600 hover:underline"
+          >
             Forgot password?
           </Link>
         </div>
@@ -93,20 +104,25 @@ const Login = () => {
       </form>
 
       <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-        Don&apos;t have a mall account?{' '}
-        <Link to={ROUTES.REGISTER_MALL} className="font-medium text-primary-600 hover:underline">
+        Don&apos;t have a mall account?{" "}
+        <Link
+          to={ROUTES.REGISTER_MALL}
+          className="font-medium text-primary-600 hover:underline"
+        >
           Register your mall
         </Link>
       </p>
 
-      <div className="mt-8 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Demo credentials</p>
+      {/*<div className="mt-8 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
+        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+          Demo credentials
+        </p>
         <ul className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
           <li>Super Admin: admin@mms.com / password123</li>
           <li>Mall Manager: manager@mms.com / password123</li>
           <li>Tenant: tenant@mms.com / password123</li>
         </ul>
-      </div>
+      </div>*/}
     </div>
   );
 };

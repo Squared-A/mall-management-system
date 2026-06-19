@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import {
   Menu,
   Sun,
@@ -11,20 +11,21 @@ import {
   User as UserIcon,
   Search,
   ChevronDown,
-} from 'lucide-react';
-import clsx from 'clsx';
-import { useAuth } from '../../hooks/useAuth';
-import { useTheme } from '../../context/ThemeContext';
-import { useNotifications } from '../../context/NotificationContext';
-import { toggleMobileSidebar } from '../../store/slices/uiSlice';
-import Avatar from '../common/Avatar';
-import { ROLE_LABELS } from '../../constants/roles';
+} from "lucide-react";
+import clsx from "clsx";
+import { useAuth } from "../../hooks/useAuth";
+import { useTheme } from "../../context/ThemeContext";
+import { useNotifications } from "../../context/NotificationContext";
+import { toggleMobileSidebar } from "../../store/slices/uiSlice";
+import Avatar from "../common/Avatar";
+import MallSelector from "../common/MallSelector";
+import { ROLE_LABELS } from "../../constants/roles";
 
 const NOTIF_DOT = {
-  success: 'bg-success-500',
-  warning: 'bg-warning-500',
-  danger: 'bg-danger-500',
-  info: 'bg-info-500',
+  success: "bg-success-500",
+  warning: "bg-warning-500",
+  danger: "bg-danger-500",
+  info: "bg-info-500",
 };
 
 const Navbar = () => {
@@ -32,7 +33,8 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+    useNotifications();
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -41,16 +43,18 @@ const Navbar = () => {
 
   useEffect(() => {
     const handler = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
-      if (userRef.current && !userRef.current.contains(e.target)) setUserMenuOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target))
+        setNotifOpen(false);
+      if (userRef.current && !userRef.current.contains(e.target))
+        setUserMenuOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   return (
@@ -74,13 +78,19 @@ const Navbar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        <MallSelector />
+
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
           className="rounded-lg p-2 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           aria-label="Toggle theme"
         >
-          {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          {theme === "dark" ? (
+            <Sun className="h-5 w-5" />
+          ) : (
+            <Moon className="h-5 w-5" />
+          )}
         </button>
 
         {/* Notifications */}
@@ -99,31 +109,49 @@ const Navbar = () => {
           {notifOpen && (
             <div className="absolute right-0 mt-2 w-80 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl animate-fadeIn overflow-hidden">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-4 py-3">
-                <p className="font-semibold text-sm text-gray-900 dark:text-gray-50">Notifications</p>
+                <p className="font-semibold text-sm text-gray-900 dark:text-gray-50">
+                  Notifications
+                </p>
                 {unreadCount > 0 && (
-                  <button onClick={markAllAsRead} className="text-xs text-primary-600 hover:underline">
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs text-primary-600 hover:underline"
+                  >
                     Mark all as read
                   </button>
                 )}
               </div>
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-gray-400">No notifications yet</p>
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">
+                    No notifications yet
+                  </p>
                 ) : (
                   notifications.map((n) => (
                     <button
                       key={n.id}
                       onClick={() => markAsRead(n.id)}
                       className={clsx(
-                        'flex w-full gap-3 border-b border-gray-50 dark:border-gray-800/50 px-4 py-3 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50',
-                        !n.read && 'bg-primary-50/40 dark:bg-primary-500/5'
+                        "flex w-full gap-3 border-b border-gray-50 dark:border-gray-800/50 px-4 py-3 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50",
+                        !n.read && "bg-primary-50/40 dark:bg-primary-500/5",
                       )}
                     >
-                      <span className={clsx('mt-1.5 h-2 w-2 shrink-0 rounded-full', NOTIF_DOT[n.type] || 'bg-gray-400')} />
+                      <span
+                        className={clsx(
+                          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                          NOTIF_DOT[n.type] || "bg-gray-400",
+                        )}
+                      />
                       <span>
-                        <span className="block font-medium text-gray-800 dark:text-gray-100">{n.title}</span>
-                        <span className="block text-gray-500 dark:text-gray-400">{n.message}</span>
-                        <span className="mt-1 block text-xs text-gray-400">{n.time}</span>
+                        <span className="block font-medium text-gray-800 dark:text-gray-100">
+                          {n.action}
+                        </span>
+                        <span className="block text-gray-500 dark:text-gray-400">
+                          {n.description}
+                        </span>
+                        <span className="mt-1 block text-xs text-gray-400">
+                          {n.time}
+                        </span>
                       </span>
                     </button>
                   ))
@@ -139,13 +167,13 @@ const Navbar = () => {
             onClick={() => setUserMenuOpen((o) => !o)}
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <Avatar name={user?.name || 'User'} size="sm" />
+            <Avatar name={user?.name || "User"} size="sm" />
             <div className="hidden sm:block text-left">
               <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-tight">
-                {user?.name || 'Guest User'}
+                {user?.name || "Guest User"}
               </p>
               <p className="text-xs text-gray-400 leading-tight">
-                {ROLE_LABELS[user?.role] || 'User'}
+                {ROLE_LABELS[user?.role] || "User"}
               </p>
             </div>
             <ChevronDown className="hidden sm:block h-4 w-4 text-gray-400" />

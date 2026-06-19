@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { authService } from '../services/authService';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import toast from "react-hot-toast";
+import { authService } from "../services/authService";
 
 const AuthContext = createContext(null);
 
@@ -10,19 +16,47 @@ export const AuthProvider = ({ children }) => {
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    // On mount, hydrate user from storage (already done in useState init).
-    setInitializing(false);
+    let mounted = true;
+
+    const hydrateSession = async () => {
+      if (!authService.isAuthenticated()) {
+        if (mounted) {
+          setUser(null);
+          setInitializing(false);
+        }
+        return;
+      }
+
+      try {
+        const currentUser = await authService.getProfile();
+        if (mounted) setUser(currentUser);
+      } catch (error) {
+        authService.logout();
+        if (mounted) setUser(null);
+      } finally {
+        if (mounted) setInitializing(false);
+      }
+    };
+
+    hydrateSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const login = useCallback(async (credentials) => {
     setLoading(true);
     try {
       const loggedInUser = await authService.login(credentials);
+      console.log(loggedInUser);
       setUser(loggedInUser);
-      toast.success(`Welcome back, ${loggedInUser?.name || 'User'}!`);
+      toast.success(`Welcome back, ${loggedInUser?.name || "User"}!`);
       return loggedInUser;
     } catch (error) {
-      const message = error?.response?.data?.message || 'Invalid email or password';
+      console.error(error.response);
+      const message =
+        error?.response?.data?.message || "Invalid email or password";
       toast.error(message);
       throw error;
     } finally {
@@ -35,10 +69,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const result = await authService.registerMall(payload);
       if (result?.user) setUser(result.user);
-      toast.success('Mall registered successfully!');
+      toast.success("Mall registered successfully!");
       return result;
     } catch (error) {
-      const message = error?.response?.data?.message || 'Registration failed';
+      const message = error?.response?.data?.message || "Registration failed";
       toast.error(message);
       throw error;
     } finally {
@@ -49,7 +83,7 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(() => {
     authService.logout();
     setUser(null);
-    toast.success('Logged out successfully');
+    toast.success("Logged out successfully");
   }, []);
 
   const updateUser = useCallback((updates) => {
@@ -76,6 +110,7 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
   return ctx;
 };
+
