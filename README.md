@@ -1,2 +1,0 @@
-# mall-management-system
-
